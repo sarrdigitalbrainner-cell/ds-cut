@@ -1,0 +1,258 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Scissors, Phone, CheckCircle2, Loader2 } from "lucide-react";
+import { clsx } from "clsx";
+import { supabase } from "@/lib/supabase";
+import { generateTicketCode, getProchainRang } from "@/lib/queue";
+import type { Coiffeur, Service } from "@/types/database";
+
+const NUMERO_SALON = "776729740";
+
+type Etape = "services" | "coiffeur" | "infos" | "envoi";
+
+export default function HomePage() {
+  const router = useRouter();
+
+  const [services, setServices] = useState<Service[]>([]);
+  const [coiffeurs, setCoiffeurs] = useState<Coiffeur[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [etape, setEtape] = useState<Etape>("services");
+  const [serviceId, setServiceId] = useState<string | null>(null);
+  const [coiffeurId, setCoiffeurId] = useState<string | null>(null);
+  const [nom, setNom] = useState("");
+  const [telephone, setTelephone] = useState("");
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchData() {
+      const [{ data: srv }, { data: coif }] = await Promise.all([
+        supabase.from("services").select("*").eq("actif", true).order("prix"),
+        supabase
+          .from("coiffeurs")
+          .select("*")
+          .order("ordre_affichage", { ascending: true }),
+      ]);
+      setServices((srv ?? []) as Service[]);
+      setCoiffeurs((coif ?? []) as Coiffeur[]);
+      setLoading(false);
+    }
+    fetchData();
+  }, []);
+
+  const serviceChoisi = services.find((s) => s.id === serviceId);
+
+  async function handleValiderTicket() {
+    setErreur(null);
+    if (!serviceId || !coiffeurId || !nom.trim() || !telephone.trim()) {
+      setErreur("Merci de compléter toutes les informations.");
+      return;
+    }
+    setEtape("envoi");
+
+    try {
+      const rang = await getProchainRang(coiffeurId);
+      const duree = serviceChoisi?.duree_minutes ?? 30;
+      const heureEstimee = new Date(Date.now() + (rang - 1) * duree * 60000);
+
+      const { data, error } = await supabase
+        .from("tickets")
+        .insert({
+          code: generateTicketCode(),
+          client_nom: nom.trim(),
+          client_telephone: telephone.trim(),
+          coiffeur_id: coiffeurId,
+          service_id: serviceId,
+          rang,
+          heure_estimee: heureEstimee.toISOString(),
+          statut: "en_attente",
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      router.push(`/ticket/${data.id}`);
+    } catch (e) {
+      setErreur("Une erreur est survenue. Merci de réessayer.");
+      setEtape("infos");
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+      </div>
+    );
+  }
+
+  return (
+    <main className="min-h-screen">
+      {/* HERO */}
+      <section className="bg-ink px-6 py-14 text-center text-white">
+        <p className="font-display text-4xl tracking-wide text-brand-300">DS CUT</p>
+        <p className="mt-2 text-sm text-gray-300">
+          Salon de coiffure — Réservation en direct
+        </p>
+        <a
+          href={`tel:${NUMERO_SALON}`}
+          className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-500 px-5 py-2 text-sm font-semibold text-white"
+        >
+          <Phone className="h-4 w-4" /> {NUMERO_SALON}
+        </a>
+      </section>
+
+      <section className="mx-auto max-w-2xl px-6 py-10">
+        {/* ÉTAPE 1 : SERVICES */}
+        <StepHeader active={etape === "services"} numero={1} titre="Choisissez votre service" />
+        {etape === "services" && (
+          <div className="mt-4 grid gap-3">
+            {services.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => {
+                  setServiceId(s.id);
+                  setEtape("coiffeur");
+                }}
+                className="flex items-center justify-between rounded-xl border border-brand-100 bg-white px-5 py-4 text-left shadow-sm transition hover:border-brand-400"
+              >
+                <div>
+                  <p className="font-semibold">{s.nom}</p>
+                  {s.description && (
+                    <p className="text-sm text-gray-500">{s.description}</p>
+                  )}
+                  <p className="text-xs text-gray-400">{s.duree_minutes} min</p>
+                </div>
+                <p className="font-display text-lg text-brand-600">{s.prix} FCFA</p>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ÉTAPE 2 : COIFFEUR */}
+        {etape !== "services" && (
+          <>
+            <StepHeader
+              active={etape === "coiffeur"}
+              numero={2}
+              titre="Choisissez votre coiffeur"
+            />
+            {etape === "coiffeur" && (
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {coiffeurs.map((c) => {
+                  const disponible = c.statut === "actif";
+                  return (
+                    <button
+                      key={c.id}
+                      disabled={!disponible}
+                      onClick={() => {
+                        setCoiffeurId(c.id);
+                        setEtape("infos");
+                      }}
+                      className={clsx(
+                        "flex flex-col items-center gap-2 rounded-xl border p-4 text-center shadow-sm transition",
+                        disponible
+                          ? "border-brand-100 bg-white hover:border-brand-400"
+                          : "cursor-not-allowed border-gray-100 bg-gray-50 opacity-50"
+                      )}
+                    >
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-100 text-brand-600">
+                        <Scissors className="h-6 w-6" />
+                      </div>
+                      <p className="text-sm font-semibold">{c.nom}</p>
+                      {c.specialite && (
+                        <p className="text-xs text-gray-400">{c.specialite}</p>
+                      )}
+                      <p
+                        className={clsx(
+                          "text-xs font-medium",
+                          disponible ? "text-green-600" : "text-red-500"
+                        )}
+                      >
+                        {disponible
+                          ? "Disponible"
+                          : c.statut === "jour_off"
+                          ? "Jour off"
+                          : "Indisponible"}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ÉTAPE 3 : INFOS CLIENT */}
+        {(etape === "infos" || etape === "envoi") && (
+          <>
+            <StepHeader active={etape === "infos"} numero={3} titre="Vos informations" />
+            <div className="mt-4 space-y-3 rounded-xl border border-brand-100 bg-white p-5 shadow-sm">
+              <div>
+                <label className="text-sm font-medium text-gray-600">Nom complet</label>
+                <input
+                  value={nom}
+                  onChange={(e) => setNom(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-4 py-2 outline-none focus:border-brand-400"
+                  placeholder="Ex: Moussa Diop"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600">
+                  Numéro de téléphone
+                </label>
+                <input
+                  value={telephone}
+                  onChange={(e) => setTelephone(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-4 py-2 outline-none focus:border-brand-400"
+                  placeholder="Ex: 77 000 00 00"
+                />
+              </div>
+
+              {erreur && <p className="text-sm text-red-500">{erreur}</p>}
+
+              <button
+                onClick={handleValiderTicket}
+                disabled={etape === "envoi"}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 py-3 font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60"
+              >
+                {etape === "envoi" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Obtenir mon ticket
+              </button>
+            </div>
+          </>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function StepHeader({
+  active,
+  numero,
+  titre,
+}: {
+  active: boolean;
+  numero: number;
+  titre: string;
+}) {
+  return (
+    <div className="mt-8 flex items-center gap-3">
+      <div
+        className={clsx(
+          "flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold",
+          active ? "bg-brand-500 text-white" : "bg-brand-100 text-brand-600"
+        )}
+      >
+        {numero}
+      </div>
+      <h2 className="font-display text-lg">{titre}</h2>
+    </div>
+  );
+}
