@@ -76,6 +76,34 @@ et place-les dans `public/icons/` :
 Un générateur pratique : https://realfavicongenerator.net ou
 https://maskable.app/editor
 
+## 🔐 Sécurité des données clients (table `tickets`)
+
+La table `tickets` (noms, téléphones) **n'a aucune policy RLS publique**,
+ni en lecture ni en écriture. C'est la seule table entièrement fermée à
+la clé anonyme : personne ne peut lister ou interroger les tickets
+directement, même avec `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
+Tout l'espace public passe par 3 fonctions RPC (`SECURITY DEFINER`,
+définies dans `supabase/schema.sql`) qui ne renvoient ou ne modifient
+jamais plus qu'un ticket précis, identifié par son UUID :
+
+- `create_ticket(...)` — crée le ticket, calcule le rang et l'heure
+  estimée côté serveur.
+- `get_ticket_by_id(p_ticket_id)` — renvoie un seul ticket, jamais une liste.
+- `declare_retard_client(p_ticket_id, p_minutes)` — met à jour uniquement
+  le ticket dont on connaît déjà l'UUID.
+
+Conséquence : la page `/ticket/[id]` ne peut plus utiliser Supabase
+Realtime pour le suivi en direct (Realtime respecte les policies RLS, et
+il n'y en a plus pour l'anonyme sur cette table). Le suivi se fait donc
+par **sondage périodique** (toutes les 6 secondes) via `get_ticket_by_id`
+— largement suffisant pour ce cas d'usage.
+
+Les dashboards **coiffeur** et **admin**, eux, restent en lecture/écriture
+directe sur la table `tickets` (policies `auth_read_tickets` /
+`auth_update_tickets`), car ils sont toujours authentifiés via Supabase
+Auth avant d'y accéder.
+
 ## 🔒 Authentification
 
 - **Coiffeurs & Akim** se connectent via **Supabase Auth** (email/mot de passe).

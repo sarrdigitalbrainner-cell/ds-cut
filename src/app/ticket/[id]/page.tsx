@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Loader2, AlarmClock } from "lucide-react";
 import TicketCard from "@/components/TicketCard";
-import { supabase } from "@/lib/supabase";
-import { declarerRetardClient } from "@/lib/queue";
+import { getTicketParId, declarerRetardClient } from "@/lib/queue";
 import type { Ticket } from "@/types/database";
+
+// Intervalle de rafraîchissement du statut du ticket (ms).
+const INTERVALLE_RAFRAICHISSEMENT = 6000;
 
 export default function TicketPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,30 +18,23 @@ export default function TicketPage() {
   const [envoiRetard, setEnvoiRetard] = useState(false);
 
   async function fetchTicket() {
-    const { data } = await supabase
-      .from("tickets")
-      .select("*, service:services(*), coiffeur:coiffeurs(*)")
-      .eq("id", id)
-      .single();
-    setTicket((data as Ticket) ?? null);
-    setLoading(false);
+    try {
+      const data = await getTicketParId(id);
+      setTicket(data);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     fetchTicket();
-
-    const channel = supabase
-      .channel(`ticket-${id}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "tickets", filter: `id=eq.${id}` },
-        () => fetchTicket()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    // La table `tickets` n'étant plus accessible en lecture directe pour
+    // un visiteur anonyme (voir schema.sql), le suivi "temps réel" via
+    // Supabase Realtime n'est plus possible ici. On rafraîchit donc le
+    // statut du ticket par sondage périodique via la fonction RPC
+    // `get_ticket_by_id`, qui ne renvoie que ce ticket précis.
+    const interval = setInterval(fetchTicket, INTERVALLE_RAFRAICHISSEMENT);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 

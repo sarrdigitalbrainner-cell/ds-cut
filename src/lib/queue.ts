@@ -8,16 +8,60 @@ import type { Ticket } from "@/types/database";
 export const RETARD_DECALAGE = 2;
 
 /**
- * Génère un code court unique pour un ticket (ex: DSC-4F8A2).
+ * Crée un ticket pour un client (espace public, non authentifié).
+ *
+ * Passe par la fonction RPC `create_ticket` (SECURITY DEFINER) plutôt
+ * que par un insert direct sur la table `tickets` : le rang, le code
+ * et l'heure estimée sont calculés côté serveur, et la table `tickets`
+ * reste totalement fermée en lecture/écriture directe à la clé anonyme.
  */
-export function generateTicketCode(): string {
-  const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
-  return `DSC-${rand}`;
+export async function creerTicket(params: {
+  clientNom: string;
+  clientTelephone: string;
+  coiffeurId: string;
+  serviceId: string;
+}): Promise<Ticket> {
+  const { data, error } = await supabase.rpc("create_ticket", {
+    p_client_nom: params.clientNom,
+    p_client_telephone: params.clientTelephone,
+    p_coiffeur_id: params.coiffeurId,
+    p_service_id: params.serviceId,
+  });
+  if (error) throw error;
+  return data as unknown as Ticket;
+}
+
+/**
+ * Récupère un ticket précis par son UUID (espace public, non
+ * authentifié), via la fonction RPC `get_ticket_by_id`. Ne permet
+ * jamais de lister ou filtrer les tickets : il faut connaître
+ * l'UUID exact du ticket (transmis uniquement au client concerné).
+ */
+export async function getTicketParId(ticketId: string): Promise<Ticket | null> {
+  const { data, error } = await supabase.rpc("get_ticket_by_id", {
+    p_ticket_id: ticketId,
+  });
+  if (error) throw error;
+  return (data as unknown as Ticket) ?? null;
+}
+
+/**
+ * Le client déclare lui-même un retard estimé (en minutes) depuis
+ * l'espace public, via la fonction RPC `declare_retard_client`
+ * (aucun accès direct en écriture à la table pour l'anonyme).
+ */
+export async function declarerRetardClient(ticketId: string, minutes: number) {
+  const { error } = await supabase.rpc("declare_retard_client", {
+    p_ticket_id: ticketId,
+    p_minutes: minutes,
+  });
+  if (error) throw error;
 }
 
 /**
  * Récupère la file active (non terminée / non annulée) d'un coiffeur,
- * triée par rang croissant.
+ * triée par rang croissant. Réservé aux dashboards authentifiés
+ * (coiffeur / admin) — couvert par la policy RLS `auth_read_tickets`.
  */
 export async function getFileCoiffeur(coiffeurId: string): Promise<Ticket[]> {
   const { data, error } = await supabase
@@ -29,16 +73,6 @@ export async function getFileCoiffeur(coiffeurId: string): Promise<Ticket[]> {
 
   if (error) throw error;
   return (data ?? []) as Ticket[];
-}
-
-/**
- * Calcule le prochain rang disponible pour un nouveau ticket
- * dans la file d'un coiffeur donné.
- */
-export async function getProchainRang(coiffeurId: string): Promise<number> {
-  const file = await getFileCoiffeur(coiffeurId);
-  if (file.length === 0) return 1;
-  return Math.max(...file.map((t) => t.rang)) + 1;
 }
 
 /**
@@ -118,16 +152,4 @@ export async function signalerRetard(ticketId: string) {
   const results = await Promise.all(updates);
   const failed = results.find((r) => r.error);
   if (failed?.error) throw failed.error;
-}
-
-/**
- * Le client déclare lui-même un retard estimé (en minutes) depuis
- * l'espace public, sans changer son rang — informe juste le coiffeur.
- */
-export async function declarerRetardClient(ticketId: string, minutes: number) {
-  const { error } = await supabase
-    .from("tickets")
-    .update({ retard_minutes: minutes })
-    .eq("id", ticketId);
-  if (error) throw error;
 }

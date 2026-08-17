@@ -145,9 +145,17 @@ function AdminContenu() {
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8">
-      <header className="mx-auto mb-8 max-w-4xl">
-        <h1 className="font-display text-2xl">Tableau de bord — Akim</h1>
-        <p className="text-sm text-gray-500">Vue d&apos;ensemble du salon DS CUT</p>
+      <header className="mx-auto mb-8 flex max-w-4xl items-start justify-between">
+        <div>
+          <h1 className="font-display text-2xl">Tableau de bord — Akim</h1>
+          <p className="text-sm text-gray-500">Vue d&apos;ensemble du salon DS CUT</p>
+        </div>
+        <button
+          onClick={() => supabase.auth.signOut()}
+          className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-500 shadow-sm hover:bg-gray-100"
+        >
+          Déconnexion
+        </button>
       </header>
 
       {/* Statistiques */}

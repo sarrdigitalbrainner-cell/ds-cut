@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Scissors, Phone, CheckCircle2, Loader2 } from "lucide-react";
 import { clsx } from "clsx";
 import { supabase } from "@/lib/supabase";
-import { generateTicketCode, getProchainRang } from "@/lib/queue";
+import { creerTicket } from "@/lib/queue";
 import type { Coiffeur, Service } from "@/types/database";
 
 const NUMERO_SALON = "776729740";
@@ -42,8 +42,6 @@ export default function HomePage() {
     fetchData();
   }, []);
 
-  const serviceChoisi = services.find((s) => s.id === serviceId);
-
   async function handleValiderTicket() {
     setErreur(null);
     if (!serviceId || !coiffeurId || !nom.trim() || !telephone.trim()) {
@@ -53,27 +51,13 @@ export default function HomePage() {
     setEtape("envoi");
 
     try {
-      const rang = await getProchainRang(coiffeurId);
-      const duree = serviceChoisi?.duree_minutes ?? 30;
-      const heureEstimee = new Date(Date.now() + (rang - 1) * duree * 60000);
-
-      const { data, error } = await supabase
-        .from("tickets")
-        .insert({
-          code: generateTicketCode(),
-          client_nom: nom.trim(),
-          client_telephone: telephone.trim(),
-          coiffeur_id: coiffeurId,
-          service_id: serviceId,
-          rang,
-          heure_estimee: heureEstimee.toISOString(),
-          statut: "en_attente",
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      router.push(`/ticket/${data.id}`);
+      const ticket = await creerTicket({
+        clientNom: nom,
+        clientTelephone: telephone,
+        coiffeurId,
+        serviceId,
+      });
+      router.push(`/ticket/${ticket.id}`);
     } catch (e) {
       setErreur("Une erreur est survenue. Merci de réessayer.");
       setEtape("infos");

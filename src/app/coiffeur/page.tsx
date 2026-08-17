@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, Play, CheckCircle2, AlarmClock, Phone } from "lucide-react";
+import { Loader2, Play, CheckCircle2, AlarmClock, Phone, Lock } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
   getFileCoiffeur,
@@ -13,12 +13,8 @@ import StatusBadge from "@/components/StatusBadge";
 import type { Coiffeur, Ticket } from "@/types/database";
 
 /**
- * NOTE D'IMPLÉMENTATION
- * Cette page suppose que l'utilisateur est déjà authentifié via
- * Supabase Auth (magic link / email+mdp) et que sa fiche `users`
- * (role = 'coiffeur') est reliée à une ligne `coiffeurs`.
- * Pour la démo, on récupère le coiffeur associé à la session active ;
- * adapte `getCoiffeurConnecte()` à ta stratégie d'auth réelle.
+ * Récupère la fiche `coiffeurs` reliée au compte Supabase Auth actuellement
+ * connecté (via users.auth_id -> users.id -> coiffeurs.user_id).
  */
 async function getCoiffeurConnecte(): Promise<Coiffeur | null> {
   const {
@@ -35,7 +31,84 @@ async function getCoiffeurConnecte(): Promise<Coiffeur | null> {
   return (data as Coiffeur) ?? null;
 }
 
-export default function DashboardCoiffeur() {
+/**
+ * Page /coiffeur : entièrement verrouillée derrière un écran de connexion.
+ * Aucune donnée de la file n'est chargée ni affichée tant que
+ * l'utilisateur n'est pas authentifié via Supabase Auth.
+ */
+export default function DashboardCoiffeurPage() {
+  const [session, setSession] = useState<boolean | null>(null);
+  const [email, setEmail] = useState("");
+  const [motDePasse, setMotDePasse] = useState("");
+  const [erreurLogin, setErreurLogin] = useState<string | null>(null);
+  const [connexionEnCours, setConnexionEnCours] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(!!data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) =>
+      setSession(!!sess)
+    );
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  async function handleLogin() {
+    setErreurLogin(null);
+    setConnexionEnCours(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: motDePasse,
+    });
+    setConnexionEnCours(false);
+    if (error) setErreurLogin("Identifiants incorrects.");
+  }
+
+  if (session === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-ink px-6">
+        <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+          <div className="mb-4 flex items-center gap-2">
+            <Lock className="h-5 w-5 text-brand-500" />
+            <h1 className="font-display text-lg">Espace Coiffeur</h1>
+          </div>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            className="mb-2 w-full rounded-lg border border-gray-200 px-4 py-2"
+          />
+          <input
+            type="password"
+            value={motDePasse}
+            onChange={(e) => setMotDePasse(e.target.value)}
+            placeholder="Mot de passe"
+            className="mb-3 w-full rounded-lg border border-gray-200 px-4 py-2"
+            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+          />
+          {erreurLogin && <p className="mb-2 text-sm text-red-500">{erreurLogin}</p>}
+          <button
+            onClick={handleLogin}
+            disabled={connexionEnCours}
+            className="w-full rounded-lg bg-brand-500 py-2 font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+          >
+            {connexionEnCours ? "Connexion..." : "Se connecter"}
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  return <FileDuCoiffeur />;
+}
+
+function FileDuCoiffeur() {
   const [coiffeur, setCoiffeur] = useState<Coiffeur | null>(null);
   const [file, setFile] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,9 +169,17 @@ export default function DashboardCoiffeur() {
 
   if (!coiffeur) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-6 text-center text-gray-500">
-        Aucun coiffeur associé à ce compte. Connectez-vous avec un compte
-        coiffeur valide.
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center text-gray-500">
+        <p>
+          Ce compte est connecté mais n&apos;est relié à aucune fiche coiffeur.
+          Contactez Akim pour faire le lien.
+        </p>
+        <button
+          onClick={() => supabase.auth.signOut()}
+          className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
+        >
+          Se déconnecter
+        </button>
       </div>
     );
   }
@@ -107,10 +188,18 @@ export default function DashboardCoiffeur() {
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8">
-      <header className="mx-auto mb-6 max-w-2xl">
-        <p className="text-sm text-gray-500">Bonjour,</p>
-        <h1 className="font-display text-2xl">{coiffeur.nom}</h1>
-        <p className="text-sm text-gray-500">{file.length} client(s) dans votre file</p>
+      <header className="mx-auto mb-6 flex max-w-2xl items-start justify-between">
+        <div>
+          <p className="text-sm text-gray-500">Bonjour,</p>
+          <h1 className="font-display text-2xl">{coiffeur.nom}</h1>
+          <p className="text-sm text-gray-500">{file.length} client(s) dans votre file</p>
+        </div>
+        <button
+          onClick={() => supabase.auth.signOut()}
+          className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-500 shadow-sm hover:bg-gray-100"
+        >
+          Déconnexion
+        </button>
       </header>
 
       <section className="mx-auto max-w-2xl space-y-3">
