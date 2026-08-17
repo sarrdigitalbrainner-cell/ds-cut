@@ -83,10 +83,16 @@ begin
 end;
 $$ language plpgsql;
 
+-- `create trigger` n'a pas d'équivalent "if not exists" en PostgreSQL :
+-- on supprime donc l'éventuel trigger existant avant de le recréer, pour
+-- que ce script reste ré-exécutable sans erreur (ex: si tu relances une
+-- version mise à jour de ce fichier sur une base déjà migrée).
+drop trigger if exists trg_coiffeurs_updated on coiffeurs;
 create trigger trg_coiffeurs_updated
 before update on coiffeurs
 for each row execute function set_updated_at();
 
+drop trigger if exists trg_tickets_updated on tickets;
 create trigger trg_tickets_updated
 before update on tickets
 for each row execute function set_updated_at();
@@ -101,7 +107,10 @@ alter table users enable row level security;
 
 -- Lecture publique (site vitrine : menu des services + coiffeurs
 -- disponibles). Ces tables ne contiennent aucune donnée personnelle.
+drop policy if exists "public_read_coiffeurs" on coiffeurs;
 create policy "public_read_coiffeurs" on coiffeurs for select using (true);
+
+drop policy if exists "public_read_services" on services;
 create policy "public_read_services" on services for select using (true);
 
 -- ⚠️ IMPORTANT : la table `tickets` contient des données personnelles
@@ -114,17 +123,28 @@ create policy "public_read_services" on services for select using (true);
 -- jamais renvoyer plus qu'un seul ticket, précisément identifié par son
 -- UUID (donc jamais devinable ni listable).
 
+-- Si une ancienne version de ce script a déjà créé des policies
+-- publiques larges sur `tickets` (public_read_tickets /
+-- public_insert_tickets), on les supprime pour ne pas les laisser
+-- traîner en base — elles ne sont plus définies ci-dessous.
+drop policy if exists "public_read_tickets" on tickets;
+drop policy if exists "public_insert_tickets" on tickets;
+
 -- Lecture et mise à jour réservées aux utilisateurs authentifiés
 -- (coiffeurs / admin) via Supabase Auth — utilisées par les dashboards.
+drop policy if exists "auth_read_tickets" on tickets;
 create policy "auth_read_tickets" on tickets for select
   using (auth.role() = 'authenticated');
 
+drop policy if exists "auth_update_tickets" on tickets;
 create policy "auth_update_tickets" on tickets for update
   using (auth.role() = 'authenticated');
 
+drop policy if exists "auth_manage_coiffeurs" on coiffeurs;
 create policy "auth_manage_coiffeurs" on coiffeurs for all
   using (auth.role() = 'authenticated');
 
+drop policy if exists "auth_manage_services" on services;
 create policy "auth_manage_services" on services for all
   using (auth.role() = 'authenticated');
 

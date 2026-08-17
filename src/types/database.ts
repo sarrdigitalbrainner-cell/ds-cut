@@ -1,6 +1,6 @@
 export type CoiffeurStatut = "actif" | "inactif" | "jour_off";
 
-export interface Coiffeur {
+export type Coiffeur = {
   id: string;
   user_id: string | null;
   nom: string;
@@ -10,9 +10,9 @@ export interface Coiffeur {
   ordre_affichage: number;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface Service {
+export type Service = {
   id: string;
   nom: string;
   description: string | null;
@@ -20,7 +20,7 @@ export interface Service {
   duree_minutes: number;
   actif: boolean;
   created_at: string;
-}
+};
 
 export type TicketStatut =
   | "en_attente"
@@ -31,7 +31,7 @@ export type TicketStatut =
 
 export type PaiementMode = "sur_place" | "transfert";
 
-export interface Ticket {
+export type Ticket = {
   id: string;
   code: string;
   client_nom: string;
@@ -49,25 +49,80 @@ export interface Ticket {
   // relations optionnelles (jointures)
   coiffeur?: Coiffeur;
   service?: Service;
-}
+};
 
 export type UserRole = "admin" | "coiffeur";
 
-export interface AppUser {
+export type AppUser = {
   id: string;
   auth_id: string | null;
   full_name: string;
   role: UserRole;
   created_at: string;
-}
+};
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
-      coiffeurs: { Row: Coiffeur; Insert: Partial<Coiffeur>; Update: Partial<Coiffeur> };
-      services: { Row: Service; Insert: Partial<Service>; Update: Partial<Service> };
-      tickets: { Row: Ticket; Insert: Partial<Ticket>; Update: Partial<Ticket> };
-      users: { Row: AppUser; Insert: Partial<AppUser>; Update: Partial<AppUser> };
+      coiffeurs: {
+        Row: Coiffeur;
+        Insert: Partial<Coiffeur>;
+        Update: Partial<Coiffeur>;
+        Relationships: [];
+      };
+      services: {
+        Row: Service;
+        Insert: Partial<Service>;
+        Update: Partial<Service>;
+        Relationships: [];
+      };
+      tickets: {
+        Row: Ticket;
+        Insert: Partial<Ticket>;
+        Update: Partial<Ticket>;
+        Relationships: [
+          {
+            foreignKeyName: "tickets_coiffeur_id_fkey";
+            columns: ["coiffeur_id"];
+            isOneToOne: false;
+            referencedRelation: "coiffeurs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tickets_service_id_fkey";
+            columns: ["service_id"];
+            isOneToOne: false;
+            referencedRelation: "services";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      users: {
+        Row: AppUser;
+        Insert: Partial<AppUser>;
+        Update: Partial<AppUser>;
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: {
+      create_ticket: {
+        Args: {
+          p_client_nom: string;
+          p_client_telephone: string;
+          p_coiffeur_id: string;
+          p_service_id: string;
+        };
+        Returns: Ticket;
+      };
+      get_ticket_by_id: {
+        Args: { p_ticket_id: string };
+        Returns: Ticket;
+      };
+      declare_retard_client: {
+        Args: { p_ticket_id: string; p_minutes: number };
+        Returns: undefined;
+      };
     };
   };
-}
+};
