@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Scissors, Phone, CheckCircle2, Loader2 } from "lucide-react";
 import { clsx } from "clsx";
@@ -25,6 +25,19 @@ export default function HomePage() {
   const [nom, setNom] = useState("");
   const [telephone, setTelephone] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+
+  const refCoiffeur = useRef<HTMLDivElement>(null);
+  const refInfos = useRef<HTMLDivElement>(null);
+
+  // Fait défiler automatiquement vers la nouvelle étape : sans ça, sur
+  // mobile, l'étape suivante peut apparaître au-dessus du point de scroll
+  // actuel (hors écran) et donner l'impression que rien ne s'est passé.
+  useEffect(() => {
+    const cible = etape === "coiffeur" ? refCoiffeur.current : etape === "infos" ? refInfos.current : null;
+    if (cible) {
+      cible.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [etape]);
 
   useEffect(() => {
     async function fetchData() {
@@ -117,7 +130,7 @@ export default function HomePage() {
 
         {/* ÉTAPE 2 : COIFFEUR */}
         {etape !== "services" && (
-          <>
+          <div ref={refCoiffeur}>
             <StepHeader
               active={etape === "coiffeur"}
               numero={2}
@@ -166,12 +179,12 @@ export default function HomePage() {
                 })}
               </div>
             )}
-          </>
+          </div>
         )}
 
         {/* ÉTAPE 3 : INFOS CLIENT */}
         {(etape === "infos" || etape === "envoi") && (
-          <>
+          <div ref={refInfos}>
             <StepHeader active={etape === "infos"} numero={3} titre="Vos informations" />
             <div className="mt-4 space-y-3 rounded-xl border border-brand-100 bg-white p-5 shadow-sm">
               <div>
@@ -210,7 +223,7 @@ export default function HomePage() {
                 Obtenir mon ticket
               </button>
             </div>
-          </>
+          </div>
         )}
       </section>
     </main>
