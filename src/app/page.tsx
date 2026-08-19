@@ -25,6 +25,7 @@ export default function HomePage() {
   const [nom, setNom] = useState("");
   const [telephone, setTelephone] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
 
   const refCoiffeur = useRef<HTMLDivElement>(null);
   const refInfos = useRef<HTMLDivElement>(null);
@@ -41,13 +42,29 @@ export default function HomePage() {
 
   useEffect(() => {
     async function fetchData() {
-      const [{ data: srv }, { data: coif }] = await Promise.all([
+      const [
+        { data: srv, error: erreurServices },
+        { data: coif, error: erreurCoiffeurs },
+      ] = await Promise.all([
         supabase.from("services").select("*").eq("actif", true).order("prix"),
         supabase
           .from("coiffeurs")
           .select("*")
           .order("ordre_affichage", { ascending: true }),
       ]);
+
+      if (erreurServices) {
+        console.error("Erreur chargement services:", erreurServices);
+      }
+      if (erreurCoiffeurs) {
+        console.error("Erreur chargement coiffeurs:", erreurCoiffeurs);
+      }
+      if (erreurServices || erreurCoiffeurs) {
+        setErreurChargement(
+          "Impossible de charger les données du salon. Vérifiez votre connexion ou réessayez plus tard."
+        );
+      }
+
       setServices((srv ?? []) as Service[]);
       setCoiffeurs((coif ?? []) as Coiffeur[]);
       setLoading(false);
@@ -102,6 +119,12 @@ export default function HomePage() {
       </section>
 
       <section className="mx-auto max-w-2xl px-6 py-10">
+        {erreurChargement && (
+          <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {erreurChargement}
+          </p>
+        )}
+
         {/* ÉTAPE 1 : SERVICES */}
         <StepHeader active={etape === "services"} numero={1} titre="Choisissez votre service" />
         {etape === "services" && (
@@ -137,47 +160,59 @@ export default function HomePage() {
               titre="Choisissez votre coiffeur"
             />
             {etape === "coiffeur" && (
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {coiffeurs.map((c) => {
-                  const disponible = c.statut === "actif";
-                  return (
-                    <button
-                      key={c.id}
-                      disabled={!disponible}
-                      onClick={() => {
-                        setCoiffeurId(c.id);
-                        setEtape("infos");
-                      }}
-                      className={clsx(
-                        "flex flex-col items-center gap-2 rounded-xl border p-4 text-center shadow-sm transition",
-                        disponible
-                          ? "border-brand-100 bg-white hover:border-brand-400"
-                          : "cursor-not-allowed border-gray-100 bg-gray-50 opacity-50"
-                      )}
-                    >
-                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-100 text-brand-600">
-                        <Scissors className="h-6 w-6" />
-                      </div>
-                      <p className="text-sm font-semibold">{c.nom}</p>
-                      {c.specialite && (
-                        <p className="text-xs text-gray-400">{c.specialite}</p>
-                      )}
-                      <p
-                        className={clsx(
-                          "text-xs font-medium",
-                          disponible ? "text-green-600" : "text-red-500"
-                        )}
-                      >
-                        {disponible
-                          ? "Disponible"
-                          : c.statut === "jour_off"
-                          ? "Jour off"
-                          : "Indisponible"}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
+              <>
+                {coiffeurs.length === 0 ? (
+                  <p className="mt-4 rounded-xl border border-dashed border-brand-200 bg-white px-5 py-6 text-center text-sm text-gray-500">
+                    Aucun coiffeur disponible pour le moment. Appelez-nous au{" "}
+                    <a href={`tel:${NUMERO_SALON}`} className="font-semibold text-brand-600">
+                      {NUMERO_SALON}
+                    </a>{" "}
+                    pour réserver.
+                  </p>
+                ) : (
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {coiffeurs.map((c) => {
+                      const disponible = c.statut === "actif";
+                      return (
+                        <button
+                          key={c.id}
+                          disabled={!disponible}
+                          onClick={() => {
+                            setCoiffeurId(c.id);
+                            setEtape("infos");
+                          }}
+                          className={clsx(
+                            "flex flex-col items-center gap-2 rounded-xl border p-4 text-center shadow-sm transition",
+                            disponible
+                              ? "border-brand-100 bg-white hover:border-brand-400"
+                              : "cursor-not-allowed border-gray-100 bg-gray-50 opacity-50"
+                          )}
+                        >
+                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-100 text-brand-600">
+                            <Scissors className="h-6 w-6" />
+                          </div>
+                          <p className="text-sm font-semibold">{c.nom}</p>
+                          {c.specialite && (
+                            <p className="text-xs text-gray-400">{c.specialite}</p>
+                          )}
+                          <p
+                            className={clsx(
+                              "text-xs font-medium",
+                              disponible ? "text-green-600" : "text-red-500"
+                            )}
+                          >
+                            {disponible
+                              ? "Disponible"
+                              : c.statut === "jour_off"
+                              ? "Jour off"
+                              : "Indisponible"}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

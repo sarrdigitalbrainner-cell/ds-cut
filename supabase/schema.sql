@@ -148,6 +148,15 @@ drop policy if exists "auth_manage_services" on services;
 create policy "auth_manage_services" on services for all
   using (auth.role() = 'authenticated');
 
+-- La table `users` a RLS activée mais n'avait aucune policy définie :
+-- par défaut Postgres refuse alors TOUT accès, y compris aux comptes
+-- authentifiés. Ça cassait silencieusement la jointure coiffeurs->users
+-- utilisée par /coiffeur pour retrouver la fiche coiffeur liée au compte
+-- connecté (l'utilisateur restait bloqué sur "compte non relié").
+drop policy if exists "auth_manage_users" on users;
+create policy "auth_manage_users" on users for all
+  using (auth.role() = 'authenticated');
+
 -- ------------------------------------------------------------
 -- Fonctions RPC sécurisées (accès public contrôlé aux tickets)
 -- ------------------------------------------------------------
