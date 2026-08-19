@@ -105,17 +105,20 @@ export default function HomePage() {
   return (
     <main className="min-h-screen">
       {/* HERO */}
-      <section className="bg-ink px-6 py-14 text-center text-white">
-        <p className="font-display text-4xl tracking-wide text-brand-300">DS CUT</p>
-        <p className="mt-2 text-sm text-gray-300">
-          Salon de coiffure — Réservation en direct
-        </p>
-        
-          href={`tel:${NUMERO_SALON}`}
-          className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-500 px-5 py-2 text-sm font-semibold text-white"
-        >
-          <Phone className="h-4 w-4" /> {NUMERO_SALON}
-        </a>
+      <section className="relative overflow-hidden bg-ink px-6 py-14 text-center text-white">
+        <div className="barber-stripes" aria-hidden="true" />
+        <div className="relative z-10">
+          <p className="font-display text-4xl tracking-wide text-brand-300">DS CUT</p>
+          <p className="mt-2 text-sm text-gray-300">
+            Salon de coiffure — Réservation en direct
+          </p>
+          <a
+            href={`tel:${NUMERO_SALON}`}
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-500 px-5 py-2 text-sm font-semibold text-white"
+          >
+            <Phone className="h-4 w-4" /> {NUMERO_SALON}
+          </a>
+        </div>
       </section>
 
       <section className="mx-auto max-w-2xl px-6 py-10">

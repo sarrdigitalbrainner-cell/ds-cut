@@ -7,3 +7,60 @@ body {
   background-color: #f7f2ea;
   color: #0d0d0d;
 }
+
+/* ------------------------------------------------------------
+   Fond "enseigne de barbier" : rayures diagonales très discrètes,
+   qui défilent lentement — clin d'œil à la traditionnelle enseigne
+   rotative de salon de coiffure, dans les couleurs de la marque.
+   ------------------------------------------------------------ */
+.barber-stripes {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.barber-stripes::before {
+  content: "";
+  position: absolute;
+  inset: -20% -20%;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(229, 169, 74, 0.32) 0px,
+    rgba(229, 169, 74, 0.32) 14px,
+    transparent 14px,
+    transparent 34px,
+    rgba(247, 242, 234, 0.14) 34px,
+    rgba(247, 242, 234, 0.14) 48px,
+    transparent 48px,
+    transparent 68px
+  );
+  animation: barberSlide 26s linear infinite;
+}
+
+.barber-stripes::after {
+  /* vignette pour garder le texte lisible au centre, sans noyer les rayures */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(13, 13, 13, 0.15) 0%,
+    rgba(13, 13, 13, 0.6) 100%
+  );
+}
+
+@keyframes barberSlide {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(-68px, 68px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barber-stripes::before {
+    animation: none;
+  }
+}
