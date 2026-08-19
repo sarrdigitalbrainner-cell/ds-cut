@@ -110,7 +110,7 @@ export default function HomePage() {
         <p className="mt-2 text-sm text-gray-300">
           Salon de coiffure — Réservation en direct
         </p>
-        <a
+        
           href={`tel:${NUMERO_SALON}`}
           className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-500 px-5 py-2 text-sm font-semibold text-white"
         >
